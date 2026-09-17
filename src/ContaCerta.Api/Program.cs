@@ -5,6 +5,7 @@ using ContaCerta.Infrastructure.Persistence;
 using ContaCerta.Infrastructure.Realtime;
 using ContaCerta.Infrastructure.Seed;
 using Microsoft.EntityFrameworkCore;
+using OpenTelemetry.Exporter;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
@@ -20,7 +21,10 @@ builder.Host.UseSerilog((context, services, configuration) => configuration
     .WriteTo.Console()
     .WriteTo.Seq(context.Configuration["Observabilidade:SeqUrl"] ?? "http://localhost:5341"));
 
-var otlpEndpoint = builder.Configuration["Observabilidade:OtlpEndpoint"] ?? "http://localhost:4317";
+// O Seq moderno aceita OTLP direto na porta principal via HTTP/protobuf
+// (/ingest/otlp/v1/...), sem precisar de um OpenTelemetry Collector separado
+// so para essa demo. Evita subir mais um container no docker-compose.
+var otlpEndpoint = builder.Configuration["Observabilidade:OtlpEndpoint"] ?? "http://localhost:8081/ingest/otlp";
 
 builder.Services.AddOpenTelemetry()
     .ConfigureResource(resource => resource.AddService("ContaCerta.Api"))
@@ -28,12 +32,20 @@ builder.Services.AddOpenTelemetry()
         .AddAspNetCoreInstrumentation()
         .AddHttpClientInstrumentation()
         .AddSqlClientInstrumentation()
-        .AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint)))
+        .AddOtlpExporter(o =>
+        {
+            o.Endpoint = new Uri(otlpEndpoint);
+            o.Protocol = OtlpExportProtocol.HttpProtobuf;
+        }))
     .WithMetrics(metrics => metrics
         .AddAspNetCoreInstrumentation()
         .AddHttpClientInstrumentation()
         .AddRuntimeInstrumentation()
-        .AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint)));
+        .AddOtlpExporter(o =>
+        {
+            o.Endpoint = new Uri(otlpEndpoint);
+            o.Protocol = OtlpExportProtocol.HttpProtobuf;
+        }));
 
 builder.Services.AddControllers()
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));

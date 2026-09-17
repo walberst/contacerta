@@ -1,0 +1,47 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "ContaCerta_Dev_2026!"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  seq:
+    image: datalust/seq:latest
+    environment:
+      ACCEPT_EULA: "Y"
+    ports:
+      - "8081:80"
+    volumes:
+      - seq_data:/data
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      seq:
+        condition: service_started
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ConnectionStrings__ContaCerta: "Server=sqlserver,1433;Database=ContaCerta;User Id=sa;Password=ContaCerta_Dev_2026!;TrustServerCertificate=True;"
+      Observabilidade__SeqUrl: "http://seq:80"
+      Observabilidade__OtlpEndpoint: "http://seq:80/ingest/otlp"
+      Cors__FrontendUrl: "http://localhost:3000"
+    ports:
+      - "5000:8080"
+
+volumes:
+  sqlserver_data:
+  seq_data:
