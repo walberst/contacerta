@@ -42,7 +42,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddApplication();
-builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddInfrastructure();
 
 var frontendUrl = builder.Configuration["Cors:FrontendUrl"] ?? "http://localhost:3000";
 builder.Services.AddCors(options => options.AddPolicy("Frontend", policy => policy
